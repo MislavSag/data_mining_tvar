@@ -1,0 +1,26 @@
+Bootstrap: docker
+From: r-base:4.3.0
+
+%post
+
+  # apt
+  apt-get update
+  apt-get install -y libssl-dev libxml2-dev libcurl4-openssl-dev
+
+  # Fundamental packages
+  R --slave -e 'install.packages("data.table")'
+  R --slave -e 'install.packages("R6")'
+  R --slave -e 'install.packages("bit64")'
+  R --slave -e 'install.packages("tsDyn")'
+  R --slave -e 'install.packages("runner")'
+  R --slave -e 'install.packages("parallel")'
+
+
+%environment
+  # Set environment variables to use the virtual environment's Python
+  export PATH="/opt/venv/bin:$PATH"
+  export RETICULATE_PYTHON="/opt/venv/bin/python"
+
+%runscript
+  # Script to run when the container is executed; passes commands to Rscript
+  Rscript $@
