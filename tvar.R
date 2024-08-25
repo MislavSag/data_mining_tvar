@@ -2,7 +2,6 @@ library(data.table)
 library(parallel)
 library(runner)
 library(tsDyn)
-library(forecast)
 
 
 # PREPARE DATA ------------------------------------------------------------
