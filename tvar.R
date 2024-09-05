@@ -4,65 +4,47 @@ library(runner)
 library(tsDyn)
 
 
-# PREPARE DATA ------------------------------------------------------------
-print("Prepare data")
 
-# read predictors
+# IMPORT DATA -------------------------------------------------------------
+# Define file name
 if (interactive()) {
-  library(fs)
-  pead_file_local = list.files("F:/predictors/spyml_dt", full.names = TRUE)
-  dates = as.Date(gsub(".*-", "", path_ext_remove(path_file(pead_file_local))),
-                  format = "%Y%m%d")
-  DT = fread(pead_file_local[which.max(dates)])
+  file_ = file.path("F:/strategies/tvar", "tvar.csv")
 } else {
-  DT = fread("spyml-predictors-20240129.csv")
+  file_ = "tvar.csv"
 }
-
-# Define predictors
-cols_non_features = c("date", "open", "high", "low", "close", "volume")
-targets = c("targetRet1", "targetRet6", "targetRet12")
-cols_features = setdiff(colnames(DT), c(cols_non_features, targets))
-
-# Convert columns to numeric. This is important only if we import existing features
-chr_to_num_cols = setdiff(colnames(DT[, .SD, .SDcols = is.character]), c("symbol"))
-print(chr_to_num_cols)
-if (length(chr_to_num_cols) > 0) {
-  DT[, (chr_to_num_cols) := lapply(.SD, as.numeric), .SDcols = chr_to_num_cols]
-}
-# Remove observations with missing target
-# Probably different for LIVE
-DT = na.omit(DT, cols = targets)
 
 # Get index
 if (interactive()) {
-  print(paste0("Number of indecies: ", length(cols_features)))
-  i = 100
+  i = 3
 } else {
-  length(cols_features)
   i = as.integer(Sys.getenv('PBS_ARRAY_INDEX'))
+}
+
+# Read predictors
+if (interactive()) {
+  DT = fread(file.path(PATH, "tvar.csv"), select = c(2, 11, i))
+} else {
+  DT = fread("tvar.csv", select = c(2, 11, i))
 }
 
 
 # TVAR --------------------------------------------------------------------
 # prepare data
-var =  cols_features[i]
-cols = c("date", "returns1", var)
-X_vars = as.data.frame(na.omit(DT[, ..cols]))
-# window_lengths = c(7 * 22 * 2, 7 * 22 * 6, 7 * 22 * 12, 7 * 22 * 24)
-window_lengths = c(7 * 22 * 2, 7 * 22 * 6, 7 * 22 * 12)
+DT = as.data.frame(na.omit(DT))
+window_lengths = c(22 * 6, 252, 252 * 2)
 
 # Prepare cluster
 cl = makeCluster(8)
-clusterExport(cl, "X_vars", envir = environment())
+clusterExport(cl, "DT", envir = environment())
 clusterEvalQ(cl, {library(tsDyn)})
 
 # Rolling TVAR
 roll_preds = lapply(window_lengths, function(x) {
   runner(
-    x = X_vars,
+    x = DT,
     f = function(x) {
       # debug
-      # x = X_vars[1:500, ]
+      # x = DT[1:500, ]
 
       # # TVAR (1)
       tv1 = tryCatch(
@@ -79,7 +61,7 @@ roll_preds = lapply(window_lengths, function(x) {
           trim = 0.05,
           # trimming parameter indicating the minimal percentage of observations in each regime
           mTh = 2,
-          # ombination of variables with same lag order for the transition variable. Either a single value (indicating which variable to take) or a combination
+          # combination of variables with same lag order for the transition variable. Either a single value (indicating which variable to take) or a combination
           plot = FALSE
         ),
         error = function(e)
@@ -88,7 +70,6 @@ roll_preds = lapply(window_lengths, function(x) {
       if (is.null(tv1)) {
         tv1_pred_onestep = NA
       } else {
-        # tv1$coeffmat
         tv1_pred = predict(tv1)[, 1]
         names(tv1_pred) = paste0("predictions_", 1:5)
         thresholds = tv1$model.specific$Thresh
@@ -113,15 +94,26 @@ roll_preds = lapply(window_lengths, function(x) {
     k = x,
     lag = 0L,
     cl = cl,
-    at = 4000:4010,
-    na_pad = TRUE
+    # at = 1:530,
+    na_pad = TRUE,
+    simplify = FALSE
   )
 })
 stopCluster(cl)
 gc()
 
+# Clean data
+roll_preds = lapply(roll_preds, function(x) {
+  x[sapply(x, function(y) !all(is.na(y)))]
+})
+roll_preds = lapply(roll_preds, function(x) rbindlist(x))
+roll_preds = lapply(seq_along(window_lengths), function(i) {
+  cbind(window = window_lengths[[i]], roll_preds[[i]])
+})
+roll_preds = rbindlist(roll_preds)
+
 # save results
-file_name = paste0(var, ".rds")
+file_name = paste0(colnames(DT)[3], ".rds")
 dir_name = "tvar_results"
 if (!dir.exists(dir_name)) {
   dir.create(dir_name)

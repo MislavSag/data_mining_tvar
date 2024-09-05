@@ -15,7 +15,6 @@ From: r-base:4.3.0
   R --slave -e 'install.packages("runner")'
   R --slave -e 'install.packages("parallel")'
 
-
 %environment
   # Set environment variables to use the virtual environment's Python
   export PATH="/opt/venv/bin:$PATH"
