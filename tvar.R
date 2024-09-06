@@ -22,6 +22,7 @@ if (interactive()) {
 
 # Read predictors
 if (interactive()) {
+  PATH = "F:/strategies/tvar"
   DT = fread(file.path(PATH, "tvar.csv"), select = c(2, 11, i))
 } else {
   DT = fread("tvar.csv", select = c(2, 11, i))
@@ -94,7 +95,7 @@ roll_preds = lapply(window_lengths, function(x) {
     k = x,
     lag = 0L,
     cl = cl,
-    # at = 1:530,
+    # at = 1000:1010,
     na_pad = TRUE,
     simplify = FALSE
   )
