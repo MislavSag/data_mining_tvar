@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-#PBS -N TVAR
+#PBS -N Tvar
 #PBS -l ncpus=8
 #PBS -l mem=8GB
 #PBS -J 3-2740
